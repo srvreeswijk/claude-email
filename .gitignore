@@ -3,3 +3,4 @@ n8n_data/
 # Never commit payslips, execution exports or anything with real amounts.
 *.pdf
 executions/
+client_secret*
