@@ -1,0 +1,665 @@
+{
+  "id": "SalStrookN8nMain",
+  "name": "Salarisstrook (n8n)",
+  "active": false,
+  "nodes": [
+    {
+      "id": "95d26d75-6a17-513d-9250-8397a442d9c0",
+      "name": "Elk uur",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "af2eb430-b908-5f12-b5e3-b269bddb7bed",
+      "name": "Zoekopdracht (automatisch)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "aa58866a-0238-5ede-acdd-7aee61e6db6c",
+              "name": "q",
+              "type": "string",
+              "value": "from:noreply@p-direkt.minbzk.nl has:attachment -label:salarisstrook-n8n newer_than:30d"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "436f5931-0d9f-5513-b2d4-7257f186844b",
+      "name": "Handmatige test",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        200
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "1eed36bd-b39b-5899-a841-66b86573d913",
+      "name": "Zoekopdracht (test)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        200
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "854426a9-7f9a-5432-ade8-debb0d5162d7",
+              "name": "q",
+              "type": "string",
+              "value": "from:noreply@p-direkt.minbzk.nl subject:\"Salarisstrook september 2026\""
+            }
+          ]
+        },
+        "options": {}
+      },
+      "notes": "Pas de zoekopdracht aan om een andere maand te testen. Mails met label salarisstrook-n8n worden overgeslagen."
+    },
+    {
+      "id": "462f06d0-15bc-5ebc-8269-adad56ba8ef2",
+      "name": "Zoek P-Direkt mail",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        440,
+        100
+      ],
+      "parameters": {
+        "operation": "getAll",
+        "limit": 10,
+        "filters": {
+          "q": "={{ $json.q }}",
+          "readStatus": "both"
+        }
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "id": "2a361ca4-7e4e-54d5-b6bc-266d1c964289",
+      "name": "Labels ophalen",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        660,
+        100
+      ],
+      "parameters": {
+        "resource": "label",
+        "operation": "getAll",
+        "returnAll": true
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "",
+          "name": "Gmail account"
+        }
+      },
+      "executeOnce": true
+    },
+    {
+      "id": "cf8e88d1-5be2-55f2-a18b-f34f9788c610",
+      "name": "Label-ID erbij",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        100
+      ],
+      "parameters": {
+        "jsCode": "// Looks up the ID of the Gmail label and marks mails that already carry it.\nconst LABEL = 'salarisstrook-n8n';\nconst label = $input.all().find(l => l.json.name === LABEL);\nif (!label) {\n  throw new Error(`Gmail-label '${LABEL}' bestaat niet. Maak hem eerst aan in Gmail.`);\n}\nreturn $('Zoek P-Direkt mail').all().map(m => ({\n  json: {\n    id: m.json.id,\n    subject: m.json.Subject,\n    labelId: label.json.id,\n    alVerwerkt: (m.json.labels || []).some(l => l.id === label.json.id),\n  },\n}));\n"
+      }
+    },
+    {
+      "id": "1ac6824f-f9d2-51c9-90db-940497a83271",
+      "name": "Nog niet verwerkt",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [
+        1100,
+        100
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "6b371362-a42e-45e2-bdd6-eac682d7c60c",
+              "leftValue": "={{ $json.alVerwerkt }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              },
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "15da1c52-ed78-5bca-8dd7-74f476e62791",
+      "name": "Mail met PDF ophalen",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1320,
+        100
+      ],
+      "parameters": {
+        "operation": "get",
+        "messageId": "={{ $json.id }}",
+        "simple": false,
+        "options": {
+          "downloadAttachments": true
+        }
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "id": "1d388ab0-5fee-5a39-a632-31f434197b63",
+      "name": "PDF naar tekst",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        1540,
+        100
+      ],
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "={{ Object.keys($binary).find(k => $binary[k].mimeType === 'application/pdf') }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "e6da4e04-058e-5667-9158-e15dd0a75959",
+      "name": "Maskeren en prompt bouwen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        100
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Masks account and personnel numbers, then builds the Claude request.\n// Only the masked text leaves this machine.\nconst masked = $json.text\n  // IBAN, with or without spaces\n  .replace(/\\b[A-Z]{2}\\d{2}(?: ?[A-Z0-9]{4}){3,7}(?: ?[A-Z0-9]{1,3})?\\b/g, '[IBAN]')\n  // Long bare digit runs: personnel number, BSN. Amounts always contain a comma.\n  .replace(/\\b\\d{6,12}\\b/g, '[NUMMER]');\n\nconst schema = {\n  type: 'object',\n  additionalProperties: false,\n  required: ['bruto', 'ikb', 'netto', 'herberekening', 'uitbetaald'],\n  properties: {\n    bruto: { anyOf: [{ type: 'number' }, { type: 'null' }] },\n    ikb: { anyOf: [{ type: 'number' }, { type: 'null' }] },\n    netto: { anyOf: [{ type: 'number' }, { type: 'null' }] },\n    herberekening: {\n      anyOf: [\n        { type: 'null' },\n        {\n          type: 'object',\n          additionalProperties: false,\n          required: ['totaal', 'onderdelen'],\n          properties: {\n            totaal: { type: 'number' },\n            onderdelen: {\n              type: 'array',\n              items: {\n                type: 'object',\n                additionalProperties: false,\n                required: ['label', 'bedrag'],\n                properties: {\n                  label: { type: 'string' },\n                  bedrag: { type: 'number' },\n                },\n              },\n            },\n          },\n        },\n      ],\n    },\n    uitbetaald: { anyOf: [{ type: 'number' }, { type: 'null' }] },\n  },\n};\n\nconst system = `You extract amounts from the text of a Dutch payslip (salarisstrook) issued by P-Direkt.\nThe text was extracted from a PDF, so columns can appear out of order.\nAmounts use Dutch notation: 6.545,34 means 6545.34. Return amounts as JSON numbers in euros.\nUse null for a field that is not on the payslip. Never estimate or compute a value that is not printed.\n\nFields:\n- bruto: the amount on the line \"Salaris\".\n- ikb: the amount on the line \"Betaling IKB\", or null.\n- netto: the amount on the line \"Netto maandelijks salaris\".\n- herberekening: null when there is no \"Herberekening\" section. Otherwise:\n  - totaal: the net amount the recalculation adds to the payment (negative if it reduces it), as printed.\n  - onderdelen: the specification lines of the recalculation (often on page 2). For each, a short\n    lowercase Dutch label of one or two words (for example \"reiskosten\", \"thuiswerk\") and the amount\n    as printed, negative if it is a deduction.\n- uitbetaald: the amount on the line \"U ontvangt\".`;\n\nreturn {\n  json: {\n    claudeRequest: {\n      model: 'claude-opus-5',\n      max_tokens: 4000,\n      fallbacks: 'default',\n      output_config: {\n        effort: 'low',\n        format: { type: 'json_schema', schema },\n      },\n      system,\n      messages: [{ role: 'user', content: masked }],\n    },\n  },\n};\n"
+      }
+    },
+    {
+      "id": "287a4a2c-ce81-516b-930c-b839f2733e46",
+      "name": "Claude: bedragen uitlezen",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1980,
+        100
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "anthropic-beta",
+              "value": "server-side-fallback-2026-07-01"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.claudeRequest) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "Anthropic API"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "be89df78-1692-5021-8f36-5302acfc267b",
+      "name": "Bericht opstellen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        100
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Turns Claude's JSON into the Dutch notification text.\nconst res = $json;\nif (res.stop_reason !== 'end_turn') {\n  throw new Error(`Claude stopte met stop_reason=${res.stop_reason}`);\n}\nconst d = JSON.parse(res.content.filter(b => b.type === 'text').map(b => b.text).join(''));\n\n// 6545.34 -> \"6.545,34\"\nconst nl = n => {\n  const [int, dec] = Math.abs(n).toFixed(2).split('.');\n  return int.replace(/\\B(?=(\\d{3})+(?!\\d))/g, '.') + ',' + dec;\n};\nconst eur = n => (n < 0 ? '-' : '') + '€' + nl(n);\nconst signed = n => (n < 0 ? '-' : '+') + '€' + nl(n);\n\n// Cross-check: every amount Claude returned must literally appear in the PDF text.\nconst pdfText = $('PDF naar tekst').item.json.text;\nconst missing = [];\nconst check = (field, n) => {\n  if (n != null && !pdfText.includes(nl(n))) missing.push(field);\n};\ncheck('bruto', d.bruto);\ncheck('IKB', d.ikb);\ncheck('netto', d.netto);\ncheck('herberekening', d.herberekening?.totaal);\n(d.herberekening?.onderdelen || []).forEach(o => check(o.label, o.bedrag));\ncheck('uitbetaald', d.uitbetaald);\n\nconst parts = [];\nif (d.bruto != null) parts.push(`bruto ${eur(d.bruto)}` + (d.ikb != null ? ` + IKB ${eur(d.ikb)}` : ''));\nif (d.netto != null) parts.push(`netto ${eur(d.netto)}`);\nif (d.herberekening) {\n  const names = d.herberekening.onderdelen.map(o => o.label).join(', ');\n  parts.push(`herberekening ${signed(d.herberekening.totaal)}` + (names ? ` (${names})` : ''));\n}\nif (d.uitbetaald != null) parts.push(`uitbetaald ${eur(d.uitbetaald)}`);\n\nlet tekst = `${$('Label-ID erbij').item.json.subject}: ${parts.join(' · ')}`;\nif (missing.length) tekst += `\\n⚠ Niet letterlijk teruggevonden in de PDF: ${missing.join(', ')}. Controleer de strook.`;\n\nreturn { json: { tekst } };\n"
+      }
+    },
+    {
+      "id": "a205057b-b404-57e4-bca3-d747092b374e",
+      "name": "Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2420,
+        100
+      ],
+      "parameters": {
+        "chatId": "VUL-HIER-JE-TELEGRAM-CHAT-ID-IN",
+        "text": "={{ $json.tekst }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "",
+          "name": "Telegram bot"
+        }
+      }
+    },
+    {
+      "id": "06a35de7-8aff-5da6-ad14-7aebc25d6304",
+      "name": "Label salarisstrook-n8n",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2640,
+        100
+      ],
+      "parameters": {
+        "operation": "addLabels",
+        "messageId": "={{ $('Mail met PDF ophalen').item.json.id }}",
+        "labelIds": "={{ [$('Label-ID erbij').item.json.labelId] }}"
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "id": "4f645bb1-947a-54d7-a301-788a2139d37b",
+      "name": "Markeer als gelezen",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2860,
+        100
+      ],
+      "parameters": {
+        "operation": "markAsRead",
+        "messageId": "={{ $('Mail met PDF ophalen').item.json.id }}"
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "id": "24eac79e-a2ec-5691-ba4f-e11da0e29d70",
+      "name": "Op de 26e om 09:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        500
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "months",
+              "monthsInterval": 1,
+              "triggerAtDayOfMonth": 26,
+              "triggerAtHour": 9
+            }
+          ]
+        },
+        "misfirePolicy": "coalesce"
+      }
+    },
+    {
+      "id": "5330791d-450d-5684-99e1-da4a9679169d",
+      "name": "Strook deze maand?",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        220,
+        500
+      ],
+      "parameters": {
+        "operation": "getAll",
+        "limit": 1,
+        "filters": {
+          "q": "=from:noreply@p-direkt.minbzk.nl after:{{ $now.startOf('month').toSeconds() }}",
+          "readStatus": "both"
+        }
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "",
+          "name": "Gmail account"
+        }
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "id": "18aa654d-c747-51b0-a6aa-f2dc56cfb4e5",
+      "name": "Niets gevonden",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        440,
+        500
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "ad35aa15-9d15-41cf-a5b8-bd858f637f62",
+              "leftValue": "={{ $json.id }}",
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              },
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c037601a-cae0-5e0e-955d-0f3b98c61bfa",
+      "name": "Telegram: nog geen strook",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        660,
+        480
+      ],
+      "parameters": {
+        "chatId": "VUL-HIER-JE-TELEGRAM-CHAT-ID-IN",
+        "text": "Nog geen salarisstrook ontvangen deze maand.",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "",
+          "name": "Telegram bot"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Elk uur": {
+      "main": [
+        [
+          {
+            "node": "Zoekopdracht (automatisch)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Zoekopdracht (automatisch)": {
+      "main": [
+        [
+          {
+            "node": "Zoek P-Direkt mail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Handmatige test": {
+      "main": [
+        [
+          {
+            "node": "Zoekopdracht (test)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Zoekopdracht (test)": {
+      "main": [
+        [
+          {
+            "node": "Zoek P-Direkt mail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Zoek P-Direkt mail": {
+      "main": [
+        [
+          {
+            "node": "Labels ophalen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Labels ophalen": {
+      "main": [
+        [
+          {
+            "node": "Label-ID erbij",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Label-ID erbij": {
+      "main": [
+        [
+          {
+            "node": "Nog niet verwerkt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Nog niet verwerkt": {
+      "main": [
+        [
+          {
+            "node": "Mail met PDF ophalen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mail met PDF ophalen": {
+      "main": [
+        [
+          {
+            "node": "PDF naar tekst",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PDF naar tekst": {
+      "main": [
+        [
+          {
+            "node": "Maskeren en prompt bouwen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Maskeren en prompt bouwen": {
+      "main": [
+        [
+          {
+            "node": "Claude: bedragen uitlezen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: bedragen uitlezen": {
+      "main": [
+        [
+          {
+            "node": "Bericht opstellen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bericht opstellen": {
+      "main": [
+        [
+          {
+            "node": "Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram": {
+      "main": [
+        [
+          {
+            "node": "Label salarisstrook-n8n",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Label salarisstrook-n8n": {
+      "main": [
+        [
+          {
+            "node": "Markeer als gelezen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Op de 26e om 09:00": {
+      "main": [
+        [
+          {
+            "node": "Strook deze maand?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Strook deze maand?": {
+      "main": [
+        [
+          {
+            "node": "Niets gevonden",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Niets gevonden": {
+      "main": [
+        [
+          {
+            "node": "Telegram: nog geen strook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Amsterdam",
+    "errorWorkflow": "SalStrookN8nFout"
+  },
+  "pinData": {},
+  "tags": []
+}

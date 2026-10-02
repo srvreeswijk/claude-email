@@ -1,0 +1,60 @@
+{
+  "id": "SalStrookN8nFout",
+  "name": "Salarisstrook (n8n) - foutmelding",
+  "active": false,
+  "nodes": [
+    {
+      "id": "04dda07f-ade1-5d0b-b3d2-7f2630a76052",
+      "name": "Bij fout",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "2ccef198-d321-5456-af90-5309dd730579",
+      "name": "Telegram: fout",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "chatId": "VUL-HIER-JE-TELEGRAM-CHAT-ID-IN",
+        "text": "=n8n-workflow \"{{ $json.workflow.name }}\" mislukt bij node \"{{ $json.execution.lastNodeExecuted }}\": {{ $json.execution.error.message }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "",
+          "name": "Telegram bot"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Bij fout": {
+      "main": [
+        [
+          {
+            "node": "Telegram: fout",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Amsterdam"
+  },
+  "pinData": {},
+  "tags": []
+}
