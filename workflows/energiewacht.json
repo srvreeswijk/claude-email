@@ -1,0 +1,544 @@
+{
+  "id": "EnergiewachtN8n",
+  "name": "Energiewacht (n8n)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "395e3046-2a17-56e3-919e-b077829de821",
+      "name": "Elk uur",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "d651e368-cc18-5566-9a6e-968f07a82c2e",
+              "name": "q",
+              "type": "string",
+              "value": "(from:energiewacht.nl OR (from:me energiewacht.nl)) newer_than:2m -label:energiewacht-n8n"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "213de787-5c0f-5869-8661-6728a1c355ed",
+      "name": "Zoekopdracht (automatisch)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "09458466-3db2-5058-badf-3d30f206b1ea",
+      "name": "Handmatige test",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "279a2eaf-d533-557e-ac76-d58f537778dc",
+              "name": "q",
+              "type": "string",
+              "value": "(from:energiewacht.nl OR (from:me energiewacht.nl)) newer_than:2m"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ccf83d09-8d4c-583c-b4b4-fa8116ef50ed",
+      "name": "Zoekopdracht (test)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        200
+      ],
+      "notes": "Zelfde zoekopdracht zonder labelfilter. Mails met label energiewacht-n8n worden toch overgeslagen; haal het label weg om een mail opnieuw te testen."
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "limit": 20,
+        "filters": {
+          "q": "={{ $json.q }}",
+          "readStatus": "both"
+        }
+      },
+      "id": "2be34e39-d57e-557e-a8bc-f4ab63633b8c",
+      "name": "Zoek Energiewacht mail",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        440,
+        100
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "label",
+        "operation": "getAll",
+        "returnAll": true
+      },
+      "id": "40731fc9-d3b2-5ee7-aba9-88d2564a2008",
+      "name": "Labels ophalen",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        660,
+        100
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "",
+          "name": "Gmail account"
+        }
+      },
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Looks up the ID of the Gmail label and marks mails that already carry it.\nconst LABEL = 'energiewacht-n8n';\nconst label = $input.all().find(l => l.json.name === LABEL);\nif (!label) {\n  throw new Error(`Gmail-label '${LABEL}' bestaat niet. Maak hem eerst aan in Gmail.`);\n}\nreturn $('Zoek Energiewacht mail').all().map(m => ({\n  json: {\n    id: m.json.id,\n    subject: m.json.Subject,\n    labelId: label.json.id,\n    alVerwerkt: (m.json.labels || []).some(l => l.id === label.json.id),\n  },\n}));\n"
+      },
+      "id": "7631b1e3-c31e-52ef-a602-750dc059465a",
+      "name": "Label-ID erbij",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "589a34b9-090e-5d38-8c1f-cfd52d478ac1",
+              "leftValue": "={{ $json.alVerwerkt }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              },
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "35892b41-3943-5b59-b09a-c6d46f79a2b4",
+      "name": "Nog niet verwerkt",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [
+        1100,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "messageId": "={{ $json.id }}",
+        "simple": false,
+        "options": {}
+      },
+      "id": "42844898-626a-5edf-aa68-bc1bf5519360",
+      "name": "Mail ophalen",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1320,
+        100
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Masks account numbers, then builds the Claude request that judges whether\n// the mail asks for a payment. Only the masked text leaves this machine.\nconst stripHtml = h => (h || '')\n  .replace(/<(style|script)[\\s\\S]*?<\\/\\1>/gi, ' ')\n  .replace(/<br\\s*\\/?>|<\\/(p|div|tr|li|h\\d)>/gi, '\\n')\n  .replace(/<[^>]+>/g, ' ')\n  .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&')\n  .replace(/[ \\t]+/g, ' ');\nconst body = ($json.text || '').trim() || stripHtml($json.html);\nif (!body.trim()) {\n  throw new Error(`Mail '${$json.subject}' heeft geen tekst om te beoordelen.`);\n}\nconst masked = body\n  // IBAN, with or without spaces\n  .replace(/\\b[A-Z]{2}\\d{2}(?: ?[A-Z0-9]{4}){3,7}(?: ?[A-Z0-9]{1,3})?\\b/g, '[IBAN]')\n  // Long bare digit runs: customer and account numbers. Amounts contain a comma.\n  .replace(/\\b\\d{6,12}\\b/g, '[NUMMER]');\n\nconst schema = {\n  type: 'object',\n  additionalProperties: false,\n  required: ['oordeel', 'samenvatting', 'bedrag', 'uiterste_datum'],\n  properties: {\n    oordeel: { type: 'string', enum: ['geen_actie', 'actie_nodig', 'onduidelijk'] },\n    samenvatting: { type: 'string' },\n    bedrag: { anyOf: [{ type: 'string' }, { type: 'null' }] },\n    uiterste_datum: { anyOf: [{ type: 'string' }, { type: 'null' }] },\n  },\n};\n\nconst system = `You read a Dutch e-mail from Energiewacht, an energy supplier, and decide whether the\ncustomer has to pay something themselves. The mail may be forwarded; judge the forwarded content.\n\noordeel:\n- \"geen_actie\": the mail says the amount is collected automatically, e.g. \"er is gekozen voor\n  automatische incasso\", \"wij schrijven het bedrag af van uw rekening\", \"het bedrag wordt\n  automatisch geincasseerd\". Also when the mail asks for no payment at all (for example a\n  refund or a newsletter).\n- \"actie_nodig\": the customer has to pay or arrange something, e.g. \"u kunt betalen op rekening\n  ...\", \"maak het bedrag over\", \"betaal voor ...\", \"de incasso is mislukt\", \"betaalherinnering\".\n  If the mail mentions automatic collection but also asks the customer to pay, choose this.\n- \"onduidelijk\": you cannot tell from the text. Never guess \"geen_actie\".\n\nsamenvatting: one short Dutch sentence on what the mail says about payment.\nbedrag: the amount to pay or collect, exactly as printed (e.g. \"€ 123,45\"), or null.\nuiterste_datum: the payment or collection date, exactly as printed, or null.`;\n\nreturn {\n  json: {\n    claudeRequest: {\n      model: 'claude-opus-5-5',\n      max_tokens: 4000,\n      fallbacks: 'default',\n      output_config: {\n        effort: 'low',\n        format: { type: 'json_schema', schema },\n      },\n      system,\n      messages: [{ role: 'user', content: `Onderwerp: ${$json.subject}\\n\\n${masked}` }],\n    },\n  },\n};\n"
+      },
+      "id": "a4a58dc6-dafa-595f-8ca6-4ab1e21beb3c",
+      "name": "Maskeren en prompt bouwen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "anthropic-beta",
+              "value": "server-side-fallback-2026-07-01"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.claudeRequest) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "5000f217-cebe-5027-997e-1cea6afada7f",
+      "name": "Claude: mail beoordelen",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1760,
+        100
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "Header Auth account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Turns Claude's verdict into the Dutch notification text.\nconst res = $json;\nif (res.stop_reason !== 'end_turn') {\n  throw new Error(`Claude stopte met stop_reason=${res.stop_reason}`);\n}\nconst d = JSON.parse(res.content.filter(b => b.type === 'text').map(b => b.text).join(''));\nconst subject = $('Label-ID erbij').item.json.subject;\n// Date the mail arrived, e.g. \"12 okt 2026, 14:03\", to tell mails with the same subject apart.\nconst mailDate = $('Mail ophalen').item.json.date;\nconst ontvangen = mailDate && new Date(mailDate).toLocaleString('nl-NL', {\n  timeZone: 'Europe/Amsterdam', dateStyle: 'medium', timeStyle: 'short',\n});\n\nconst kop = {\n  geen_actie: '✅ Energiewacht: geen betaalactie nodig.',\n  actie_nodig: '⚠️ Let op, actie nodig: Energiewacht vraagt je zelf te betalen.',\n  onduidelijk: '❓ Energiewacht: niet duidelijk of je moet betalen. Lees de mail zelf.',\n}[d.oordeel];\nconst details = [\n  d.bedrag && `Bedrag: ${d.bedrag}`,\n  d.uiterste_datum && `Betaaldatum: ${d.uiterste_datum}`,\n].filter(Boolean).join(' · ');\n\nconst onderwerp = `Onderwerp: ${subject}` + (ontvangen ? ` (ontvangen ${ontvangen})` : '');\nconst tekst = [kop, details, d.samenvatting, onderwerp].filter(Boolean).join('\\n');\nreturn { json: { tekst, oordeel: d.oordeel } };\n"
+      },
+      "id": "c8a93f2e-5fb7-5a9e-9943-3b703d981f9d",
+      "name": "Bericht opstellen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "VUL-HIER-JE-TELEGRAM-CHAT-ID-IN",
+        "text": "={{ $json.tekst }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "d8056220-5d69-55b5-9b35-1079be285209",
+      "name": "Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2200,
+        100
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "addLabels",
+        "messageId": "={{ $('Mail ophalen').item.json.id }}",
+        "labelIds": "={{ [$('Label-ID erbij').item.json.labelId] }}"
+      },
+      "id": "d769e335-ee33-5064-8b8e-5792826e54a1",
+      "name": "Label energiewacht-n8n",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2420,
+        100
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "8ec9c3e7-27b1-5507-a271-09110d533cb9",
+              "leftValue": "={{ $('Bericht opstellen').item.json.oordeel }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "rightValue": "geen_actie"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "30e6a0bd-6364-5332-8590-ec3dccf5c497",
+      "name": "Geen actie nodig",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [
+        2640,
+        100
+      ],
+      "notes": "Alleen mails zonder actie worden als gelezen gemarkeerd; de andere blijven ongelezen in Gmail staan."
+    },
+    {
+      "parameters": {
+        "operation": "markAsRead",
+        "messageId": "={{ $('Mail ophalen').item.json.id }}"
+      },
+      "id": "e8c602af-09ee-5e2c-9c29-d8ed05394c4c",
+      "name": "Markeer als gelezen",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2860,
+        100
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "",
+          "name": "Gmail account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Elk uur": {
+      "main": [
+        [
+          {
+            "node": "Zoekopdracht (automatisch)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Zoekopdracht (automatisch)": {
+      "main": [
+        [
+          {
+            "node": "Zoek Energiewacht mail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Handmatige test": {
+      "main": [
+        [
+          {
+            "node": "Zoekopdracht (test)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Zoekopdracht (test)": {
+      "main": [
+        [
+          {
+            "node": "Zoek Energiewacht mail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Zoek Energiewacht mail": {
+      "main": [
+        [
+          {
+            "node": "Labels ophalen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Labels ophalen": {
+      "main": [
+        [
+          {
+            "node": "Label-ID erbij",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Label-ID erbij": {
+      "main": [
+        [
+          {
+            "node": "Nog niet verwerkt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Nog niet verwerkt": {
+      "main": [
+        [
+          {
+            "node": "Mail ophalen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mail ophalen": {
+      "main": [
+        [
+          {
+            "node": "Maskeren en prompt bouwen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Maskeren en prompt bouwen": {
+      "main": [
+        [
+          {
+            "node": "Claude: mail beoordelen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: mail beoordelen": {
+      "main": [
+        [
+          {
+            "node": "Bericht opstellen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bericht opstellen": {
+      "main": [
+        [
+          {
+            "node": "Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram": {
+      "main": [
+        [
+          {
+            "node": "Label energiewacht-n8n",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Label energiewacht-n8n": {
+      "main": [
+        [
+          {
+            "node": "Geen actie nodig",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Geen actie nodig": {
+      "main": [
+        [
+          {
+            "node": "Markeer als gelezen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Amsterdam",
+    "errorWorkflow": "SalStrookN8nFout"
+  },
+  "pinData": {},
+  "tags": []
+}

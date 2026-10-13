@@ -1,10 +1,10 @@
 # Running n8n on the VPS
 
-The payslip workflow runs on the same TransIP VPS as GPXDock, at **https://n8n.proeftuin.tech**:
+The payslip and Energiewacht workflows run on the same TransIP VPS as GPXDock, at **https://tasks.proeftuin.tech**:
 
 ```
 browser ──HTTPS──> Caddy (ports 80/443, Let's Encrypt, login) ─┬─> gpxdock-web   gpxdock.proeftuin.tech
-                                                               └─> n8n           n8n.proeftuin.tech
+                                                               └─> n8n           tasks.proeftuin.tech
 ```
 
 - The VPS and Caddy are set up by the scripts in `GPXDock/GPXDock.Web/deploy` (see its README). Caddy
@@ -30,7 +30,7 @@ work on the VPS. For running n8n on your own machine instead, see the main [READ
 
 1. **VPS, Caddy and DNS** (already done)
    - The VPS is prepared and Caddy runs: steps 1-6 in `GPXDock/GPXDock.Web/deploy/README.md`.
-   - DNS: an `A` record `n8n` → the VPS IPv4 address. Check: `dig +short n8n.proeftuin.tech`.
+   - DNS: an `A` record `tasks` → the VPS IPv4 address. Check: `dig +short tasks.proeftuin.tech`.
 
 2. **Local settings** (once per laptop)
    ```bash
@@ -46,11 +46,12 @@ work on the VPS. For running n8n on your own machine instead, see the main [READ
    the Caddy site and reloads Caddy (the other sites keep running).
 
 4. **Start n8n:** `./deploy.sh`
-   Waits for the health check. Then open https://n8n.proeftuin.tech, log in with the Caddy login and
+   Waits for the health check. Then open https://tasks.proeftuin.tech, log in with the Caddy login and
    create the n8n owner account.
 
 5. **Credentials** (manual, in n8n). Same names as in the main README, steps 2-4:
-   - **`Gmail account`**: first add the redirect URI `https://n8n.proeftuin.tech/rest/oauth2-credential/callback`
+    **Crentials are in lastpass, secret-note: n8n-claude-email**
+   - **`Gmail account`**: first add the redirect URI `https://tasks.proeftuin.tech/rest/oauth2-credential/callback`
      to the OAuth client in Google Cloud (*Clients → your client → Authorized redirect URIs*). You can keep the
      `localhost` one next to it. Then create the credential with the same client ID and secret and sign in.
      During the Google sign-in the browser may ask for the Caddy login again; that is fine.
@@ -60,7 +61,7 @@ work on the VPS. For running n8n on your own machine instead, see the main [READ
 6. **Workflows:** `./import_workflows.sh`
    Copies `../workflows/*.json` into n8n. With `TELEGRAM_CHAT_ID` set in `config.env` the chat ID is
    filled in; otherwise replace `VUL-HIER-JE-TELEGRAM-CHAT-ID-IN` in the three Telegram nodes by hand.
-   Run `Handmatige test` once (see "Testing" in the main README), then activate both workflows.
+   Run `Handmatige test` once (see "Testing" in the main README), then activate the workflows.
 
 7. **Stop the local n8n** so the payslip is not processed twice:
    `docker-compose down` in the repo root (and `systemctl --user disable podman-restart.service` if
@@ -98,6 +99,16 @@ RESET_PASSWORD=1 ./setup_n8n.sh    # new Caddy login
 
 For containers, disk and memory of the whole VPS, use `./status.sh` in the GPXDock deploy directory.
 
+## Change the hostname
+
+1. Add an `A` record for the new name (step 1) and check it with `dig +short <new host>`.
+2. Set `N8N_HOST` in `config.env`.
+3. `./setup_n8n.sh && ./deploy.sh`: rewrites the Caddy site (Caddy gets a certificate for the new name)
+   and restarts n8n with the new URL. The Caddy login, workflows and credentials stay.
+4. Add `https://<new host>/rest/oauth2-credential/callback` to the Google OAuth client (step 5). The
+   Gmail credential keeps working without it, but a new *Sign in with Google* needs it.
+5. Remove the old `A` record when nothing uses it any more.
+
 ## Restore a backup
 
 This **replaces** all n8n data (workflows, credentials, execution history).
@@ -117,13 +128,13 @@ too. Keep the archives as safe as a password: together they open every stored cr
 ## Troubleshooting
 
 - **Browser shows a certificate error.** Caddy could not get a certificate yet. Check DNS
-  (`dig +short n8n.proeftuin.tech`), then `ssh deploy@<ip> docker logs caddy`.
+  (`dig +short tasks.proeftuin.tech`), then `ssh deploy@<ip> docker logs caddy`.
 - **`setup_n8n.sh` says Caddy is not running.** Run `./02_setup_proxy.sh` in the GPXDock deploy directory.
 - **Gmail sign-in says `redirect_uri_mismatch`.** The VPS redirect URI is missing in the Google OAuth client
   (step 5).
 - **"Credentials could not be decrypted" after a restore.** `.env` and the data volume come from different
   backups. Restore both from the same archive.
-- **No Telegram messages.** Are both workflows active? Check the executions in n8n and `./logs.sh`.
+- **No Telegram messages.** Are the workflows active? Check the executions in n8n and `./logs.sh`.
 
 ## Not done yet
 

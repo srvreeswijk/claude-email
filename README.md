@@ -2,6 +2,8 @@
 
 An n8n workflow that finds new P-Direkt payslip mail in Gmail, reads the PDF, extracts the amounts with Claude, sends a summary to Telegram, adds the label `salarisstrook-n8n` and marks the mail as read. It runs next to the existing Apps Script and Cowork task and does not touch their labels (`salarisstrook`, `pdf-in-drive`).
 
+A second workflow checks Energiewacht mail for payments you have to make yourself; see [Energiewacht workflow](#energiewacht-workflow).
+
 ## How it works
 
 ```
@@ -70,9 +72,9 @@ Create a key in https://console.anthropic.com (billed per use, separate from a C
    ```
 3. In n8n: *Credentials → Add → Telegram API*, name **`Telegram account`**, paste the token.
 
-### 5. Gmail label
+### 5. Gmail labels
 
-In Gmail, create the label **`salarisstrook-n8n`**. The workflow fails with a clear message if it is missing.
+In Gmail, create the labels **`salarisstrook-n8n`** and **`energiewacht-n8n`**. A workflow fails with a clear message if its label is missing.
 
 ### 6. Import the workflows
 
@@ -82,9 +84,9 @@ With the three credentials in place (names must match, n8n links them by name):
 podman exec n8n n8n import:workflow --separate --input=/workflows
 ```
 
-Then open both workflows and replace `VUL-HIER-JE-TELEGRAM-CHAT-ID-IN` with your chat ID in the Telegram nodes (two in the main workflow, one in the error workflow). Do not commit the chat ID: export it back only after replacing it with the placeholder, or keep your edits in n8n only.
+Then open the workflows and replace `VUL-HIER-JE-TELEGRAM-CHAT-ID-IN` with your chat ID in the Telegram nodes (two in the payslip workflow, one in the Energiewacht workflow, one in the error workflow). Do not commit the chat ID: export it back only after replacing it with the placeholder, or keep your edits in n8n only.
 
-Activate both workflows when testing is done (*Publish* / *Active* toggle).
+Activate the workflows when testing is done (*Publish* / *Active* toggle).
 
 ## Testing
 
@@ -98,6 +100,41 @@ Activate both workflows when testing is done (*Publish* / *Active* toggle).
 5. **Restart.** `docker-compose restart` and run a test again: the Gmail credential must still work.
 
 To re-test a mail, remove the `salarisstrook-n8n` label in Gmail.
+
+## Energiewacht workflow
+
+`Energiewacht (n8n)` sends a Telegram message for every mail from Energiewacht, saying whether you have to pay yourself:
+
+```
+Elk uur ─────────► Zoekopdracht (automatisch) ─┐
+Handmatige test ─► Zoekopdracht (test) ────────┤
+                                               ▼
+  Zoek Energiewacht mail → Labels ophalen → Label-ID erbij → Nog niet verwerkt
+  → Mail ophalen → Maskeren en prompt bouwen → Claude: mail beoordelen
+  → Bericht opstellen → Telegram → Label energiewacht-n8n
+  → Geen actie nodig → Markeer als gelezen
+```
+
+- **Search.** `(from:energiewacht.nl OR (from:me energiewacht.nl)) -label:energiewacht-n8n newer_than:2m`. The `from:me` part picks up mails you forward to yourself, for testing. It also matches any other mail you send that contains `energiewacht.nl`. Same hourly retry and explicit skip check as the payslip workflow.
+- **Verdict.** Claude reads the mail body (plain text, or the HTML stripped of tags) and returns one of three verdicts. The wording in the mails varies, so this is not a fixed text match:
+  - `geen_actie` → *✅ Energiewacht: geen betaalactie nodig.* For example "er is gekozen voor automatische incasso, wij schrijven het af van uw rekening", or a mail that asks for no payment at all.
+  - `actie_nodig` → *⚠️ Let op, actie nodig: Energiewacht vraagt je zelf te betalen.* For example "u kunt betalen op rekening ...", a payment reminder or a failed direct debit. When a mail mentions both, this verdict wins.
+  - `onduidelijk` → *❓ ... Lees de mail zelf.* Claude is told never to guess `geen_actie`.
+
+  The message also shows the amount and payment date as printed, a one-line summary, and the subject with the date the mail arrived, so you can find the exact mail:
+
+  ```
+  ⚠️ Let op, actie nodig: Energiewacht vraagt je zelf te betalen.
+  Bedrag: € 87,50 · Betaaldatum: 28 oktober 2026
+  Je moet het bedrag zelf overmaken.
+  Onderwerp: Uw maandfactuur oktober (ontvangen 12 okt 2026, 14:03)
+  ```
+- **Read status.** Only `geen_actie` mails are marked as read; the others stay unread in Gmail as a reminder. All of them get the label.
+- **Attachments are not read.** Only the mail body is judged. If Energiewacht ever puts the payment method only in a PDF, the verdict will be `onduidelijk`.
+- **Masking and model.** Same masking as the payslip workflow (IBAN → `[IBAN]`, 6-12 digit runs → `[NUMMER]`). Model `claude-opus-5-5` with `effort: low`, structured output and `fallbacks: "default"`. A mail is a few hundred tokens, well under a cent per run.
+- **Errors** go to the same error workflow.
+
+**Testing.** Forward an Energiewacht mail (or write one with one of the sentences above) to yourself, keeping `energiewacht.nl` in the text. Run `Handmatige test` and check the Telegram message and the `energiewacht-n8n` label. To re-test a mail, remove that label.
 
 ## Data and privacy
 

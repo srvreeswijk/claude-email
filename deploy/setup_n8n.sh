@@ -3,7 +3,6 @@
 # and the Caddy site with a login in front of n8n.
 # Safe to run again. RESET_PASSWORD=1 ./setup_n8n.sh sets a new login password.
 source "$(dirname "$0")/lib.sh"
-[[ -t 0 ]] || die "This script asks for a password; run it in a terminal."
 require_caddy
 
 info "Copying compose.yml to $APP_DIR"
@@ -22,6 +21,7 @@ sync_n8n_env
 
 # The login is stored as a bcrypt hash in $APP_DIR/basicauth ("user hash").
 if [[ "${RESET_PASSWORD:-0}" == 1 ]] || ! vps "test -f $APP_DIR/basicauth"; then
+    [[ -t 0 ]] || die "This step asks for a password; run it in a terminal."
     info "Caddy basic auth for https://$N8N_HOST (like htpasswd: the browser asks for it before n8n opens)."
     info "Choose a new user name and password. Not your ssh login. Only a bcrypt hash is stored on the VPS."
     read -rp "Basic auth user name for https://$N8N_HOST: " auth_user
