@@ -39,7 +39,7 @@
               "id": "aa58866a-0238-5ede-acdd-7aee61e6db6c",
               "name": "q",
               "type": "string",
-              "value": "from:noreply@p-direkt.minbzk.nl has:attachment -label:salarisstrook-n8n newer_than:30d"
+              "value": "from:noreply@p-direkt.minbzk.nl subject:Salarisstrook has:attachment -label:salarisstrook-n8n newer_than:30d"
             }
           ]
         },
@@ -159,7 +159,7 @@
           },
           "conditions": [
             {
-              "id": "6b371362-a42e-45e2-bdd6-eac682d7c60c",
+              "id": "a82bafce-5d9d-4a1d-b9dc-134438838db8",
               "leftValue": "={{ $json.alVerwerkt }}",
               "operator": {
                 "type": "boolean",
@@ -224,7 +224,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "// Masks account and personnel numbers, then builds the Claude request.\n// Only the masked text leaves this machine.\nconst masked = $json.text\n  // IBAN, with or without spaces\n  .replace(/\\b[A-Z]{2}\\d{2}(?: ?[A-Z0-9]{4}){3,7}(?: ?[A-Z0-9]{1,3})?\\b/g, '[IBAN]')\n  // Long bare digit runs: personnel number, BSN. Amounts always contain a comma.\n  .replace(/\\b\\d{6,12}\\b/g, '[NUMMER]');\n\nconst schema = {\n  type: 'object',\n  additionalProperties: false,\n  required: ['bruto', 'ikb', 'netto', 'herberekening', 'uitbetaald'],\n  properties: {\n    bruto: { anyOf: [{ type: 'number' }, { type: 'null' }] },\n    ikb: { anyOf: [{ type: 'number' }, { type: 'null' }] },\n    netto: { anyOf: [{ type: 'number' }, { type: 'null' }] },\n    herberekening: {\n      anyOf: [\n        { type: 'null' },\n        {\n          type: 'object',\n          additionalProperties: false,\n          required: ['totaal', 'onderdelen'],\n          properties: {\n            totaal: { type: 'number' },\n            onderdelen: {\n              type: 'array',\n              items: {\n                type: 'object',\n                additionalProperties: false,\n                required: ['label', 'bedrag'],\n                properties: {\n                  label: { type: 'string' },\n                  bedrag: { type: 'number' },\n                },\n              },\n            },\n          },\n        },\n      ],\n    },\n    uitbetaald: { anyOf: [{ type: 'number' }, { type: 'null' }] },\n  },\n};\n\nconst system = `You extract amounts from the text of a Dutch payslip (salarisstrook) issued by P-Direkt.\nThe text was extracted from a PDF, so columns can appear out of order.\nAmounts use Dutch notation: 6.545,34 means 6545.34. Return amounts as JSON numbers in euros.\nUse null for a field that is not on the payslip. Never estimate or compute a value that is not printed.\n\nFields:\n- bruto: the amount on the line \"Salaris\".\n- ikb: the amount on the line \"Betaling IKB\", or null.\n- netto: the amount on the line \"Netto maandelijks salaris\".\n- herberekening: null when there is no \"Herberekening\" section. Otherwise:\n  - totaal: the net amount the recalculation adds to the payment (negative if it reduces it), as printed.\n  - onderdelen: the specification lines of the recalculation (often on page 2). For each, a short\n    lowercase Dutch label of one or two words (for example \"reiskosten\", \"thuiswerk\") and the amount\n    as printed, negative if it is a deduction.\n- uitbetaald: the amount on the line \"U ontvangt\".`;\n\nreturn {\n  json: {\n    claudeRequest: {\n      model: 'claude-opus-5',\n      max_tokens: 4000,\n      fallbacks: 'default',\n      output_config: {\n        effort: 'low',\n        format: { type: 'json_schema', schema },\n      },\n      system,\n      messages: [{ role: 'user', content: masked }],\n    },\n  },\n};\n"
+        "jsCode": "// Masks account and personnel numbers, then builds the Claude request.\n// Only the masked text leaves this machine.\nconst masked = $json.text\n  // IBAN, with or without spaces\n  .replace(/\\b[A-Z]{2}\\d{2}(?: ?[A-Z0-9]{4}){3,7}(?: ?[A-Z0-9]{1,3})?\\b/g, '[IBAN]')\n  // Long bare digit runs: personnel number, BSN. Amounts always contain a comma.\n  .replace(/\\b\\d{6,12}\\b/g, '[NUMMER]');\n\nconst schema = {\n  type: 'object',\n  additionalProperties: false,\n  required: ['bruto', 'ikb', 'netto', 'herberekening', 'uitbetaald'],\n  properties: {\n    bruto: { anyOf: [{ type: 'number' }, { type: 'null' }] },\n    ikb: { anyOf: [{ type: 'number' }, { type: 'null' }] },\n    netto: { anyOf: [{ type: 'number' }, { type: 'null' }] },\n    herberekening: {\n      anyOf: [\n        { type: 'null' },\n        {\n          type: 'object',\n          additionalProperties: false,\n          required: ['posten', 'onderdelen'],\n          properties: {\n            posten: {\n              type: 'array',\n              items: {\n                type: 'object',\n                additionalProperties: false,\n                required: ['omschrijving', 'bedrag'],\n                properties: {\n                  omschrijving: { type: 'string' },\n                  bedrag: { type: 'number' },\n                },\n              },\n            },\n            onderdelen: {\n              type: 'array',\n              items: {\n                type: 'object',\n                additionalProperties: false,\n                required: ['categorie', 'bedrag'],\n                properties: {\n                  categorie: { type: 'string', enum: ['reiskosten', 'thuiswerk', 'ikb', 'overig'] },\n                  bedrag: { type: 'number' },\n                },\n              },\n            },\n          },\n        },\n      ],\n    },\n    uitbetaald: { anyOf: [{ type: 'number' }, { type: 'null' }] },\n  },\n};\n\nconst system = `You extract amounts from the text of a Dutch payslip (salarisstrook) issued by P-Direkt.\nThe text was extracted from a PDF, so columns can appear out of order.\nAmounts use Dutch notation: 6.545,34 means 6545.34. Return amounts as JSON numbers in euros.\nUse null for a field that is not on the payslip. Never estimate or compute a value that is not printed.\n\nFields:\n- bruto: the amount on the line \"Salaris\".\n- ikb: the amount on the line \"Betaling IKB\", or null.\n- netto: the amount on the line \"Netto maandelijks salaris\".\n- herberekening: null when the payslip has no recalculation (no lines marked with * that refer to\n  \"herberekening\", and no \"Herberekening\" appendix). Otherwise:\n  - posten: the lines on the first page that are marked with * as the result of a recalculation\n    (for example \"Herb.verschil incidenteel\" and \"Netto Herb.verschil\"). For each, the description\n    as printed and the amount as printed, negative when printed with a minus sign.\n  - onderdelen: the individual specification lines of the \"Herberekening\" appendix, without its\n    subtotal lines. For each, a categorie and the amount as printed, negative when printed with a\n    minus sign. Categories: \"reiskosten\" for commuting (woon-werk, reiskosten, also when paid via\n    IKB), \"thuiswerk\" for working from home, \"ikb\" for other IKB lines, \"overig\" for anything else.\n- uitbetaald: the amount on the line \"U ontvangt\".`;\n\nreturn {\n  json: {\n    claudeRequest: {\n      model: 'claude-opus-5',\n      max_tokens: 4000,\n      fallbacks: 'default',\n      output_config: {\n        effort: 'low',\n        format: { type: 'json_schema', schema },\n      },\n      system,\n      messages: [{ role: 'user', content: masked }],\n    },\n  },\n};\n"
       }
     },
     {
@@ -264,7 +264,7 @@
       "credentials": {
         "httpHeaderAuth": {
           "id": "",
-          "name": "Anthropic API"
+          "name": "Header Auth account"
         }
       },
       "retryOnFail": true,
@@ -282,7 +282,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "// Turns Claude's JSON into the Dutch notification text.\nconst res = $json;\nif (res.stop_reason !== 'end_turn') {\n  throw new Error(`Claude stopte met stop_reason=${res.stop_reason}`);\n}\nconst d = JSON.parse(res.content.filter(b => b.type === 'text').map(b => b.text).join(''));\n\n// 6545.34 -> \"6.545,34\"\nconst nl = n => {\n  const [int, dec] = Math.abs(n).toFixed(2).split('.');\n  return int.replace(/\\B(?=(\\d{3})+(?!\\d))/g, '.') + ',' + dec;\n};\nconst eur = n => (n < 0 ? '-' : '') + '€' + nl(n);\nconst signed = n => (n < 0 ? '-' : '+') + '€' + nl(n);\n\n// Cross-check: every amount Claude returned must literally appear in the PDF text.\nconst pdfText = $('PDF naar tekst').item.json.text;\nconst missing = [];\nconst check = (field, n) => {\n  if (n != null && !pdfText.includes(nl(n))) missing.push(field);\n};\ncheck('bruto', d.bruto);\ncheck('IKB', d.ikb);\ncheck('netto', d.netto);\ncheck('herberekening', d.herberekening?.totaal);\n(d.herberekening?.onderdelen || []).forEach(o => check(o.label, o.bedrag));\ncheck('uitbetaald', d.uitbetaald);\n\nconst parts = [];\nif (d.bruto != null) parts.push(`bruto ${eur(d.bruto)}` + (d.ikb != null ? ` + IKB ${eur(d.ikb)}` : ''));\nif (d.netto != null) parts.push(`netto ${eur(d.netto)}`);\nif (d.herberekening) {\n  const names = d.herberekening.onderdelen.map(o => o.label).join(', ');\n  parts.push(`herberekening ${signed(d.herberekening.totaal)}` + (names ? ` (${names})` : ''));\n}\nif (d.uitbetaald != null) parts.push(`uitbetaald ${eur(d.uitbetaald)}`);\n\nlet tekst = `${$('Label-ID erbij').item.json.subject}: ${parts.join(' · ')}`;\nif (missing.length) tekst += `\\n⚠ Niet letterlijk teruggevonden in de PDF: ${missing.join(', ')}. Controleer de strook.`;\n\nreturn { json: { tekst } };\n"
+        "jsCode": "// Turns Claude's JSON into the Dutch notification text.\nconst res = $json;\nif (res.stop_reason !== 'end_turn') {\n  throw new Error(`Claude stopte met stop_reason=${res.stop_reason}`);\n}\nconst d = JSON.parse(res.content.filter(b => b.type === 'text').map(b => b.text).join(''));\n\n// 6545.34 -> \"6.545,34\"\nconst nl = n => {\n  const [int, dec] = Math.abs(n).toFixed(2).split('.');\n  return int.replace(/\\B(?=(\\d{3})+(?!\\d))/g, '.') + ',' + dec;\n};\nconst eur = n => (n < 0 ? '-' : '') + '€' + nl(n);\nconst signed = n => (n < 0 ? '-' : '+') + '€' + nl(n);\n\n// Cross-check: every amount Claude returned must literally appear in the PDF text.\nconst pdfText = $('PDF naar tekst').item.json.text;\nconst missing = [];\nconst check = (field, n) => {\n  if (n != null && !pdfText.includes(nl(n))) missing.push(field);\n};\ncheck('bruto', d.bruto);\ncheck('IKB', d.ikb);\ncheck('netto', d.netto);\n(d.herberekening?.posten || []).forEach(p => check(p.omschrijving, p.bedrag));\n(d.herberekening?.onderdelen || []).forEach(o => check(o.categorie, o.bedrag));\ncheck('uitbetaald', d.uitbetaald);\n\nconst parts = [];\nif (d.bruto != null) parts.push(`bruto ${eur(d.bruto)}` + (d.ikb != null ? ` + IKB ${eur(d.ikb)}` : ''));\nif (d.netto != null) parts.push(`netto ${eur(d.netto)}`);\nif (d.herberekening) {\n  // The payslip prints no total; it is the sum of the starred lines on page 1.\n  const totaal = d.herberekening.posten.reduce((sum, p) => sum + p.bedrag, 0);\n  const names = [...new Set(d.herberekening.onderdelen.map(o => o.categorie))].join(', ');\n  parts.push(`herberekening ${signed(totaal)}` + (names ? ` (${names})` : ''));\n}\nif (d.uitbetaald != null) parts.push(`uitbetaald ${eur(d.uitbetaald)}`);\n\nlet tekst = `${$('Label-ID erbij').item.json.subject}: ${parts.join(' · ')}`;\nif (missing.length) tekst += `\\n⚠ Niet letterlijk teruggevonden in de PDF: ${missing.join(', ')}. Controleer de strook.`;\n\nreturn { json: { tekst } };\n"
       }
     },
     {
@@ -304,7 +304,7 @@
       "credentials": {
         "telegramApi": {
           "id": "",
-          "name": "Telegram bot"
+          "name": "Telegram account"
         }
       }
     },
@@ -385,7 +385,7 @@
         "operation": "getAll",
         "limit": 1,
         "filters": {
-          "q": "=from:noreply@p-direkt.minbzk.nl after:{{ $now.startOf('month').toSeconds() }}",
+          "q": "=from:noreply@p-direkt.minbzk.nl subject:Salarisstrook after:{{ $now.startOf('month').toSeconds() }}",
           "readStatus": "both"
         }
       },
@@ -416,7 +416,7 @@
           },
           "conditions": [
             {
-              "id": "ad35aa15-9d15-41cf-a5b8-bd858f637f62",
+              "id": "9772c1ec-f79b-4c10-9b6f-6ceb9b2f0658",
               "leftValue": "={{ $json.id }}",
               "operator": {
                 "type": "string",
@@ -450,7 +450,7 @@
       "credentials": {
         "telegramApi": {
           "id": "",
-          "name": "Telegram bot"
+          "name": "Telegram account"
         }
       }
     }

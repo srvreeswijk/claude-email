@@ -16,11 +16,12 @@ Handmatige test ─► Zoekopdracht (test) ────────┤
 Op de 26e om 09:00 → Strook deze maand? → Niets gevonden → Telegram: nog geen strook
 ```
 
-- **Hourly search instead of a Gmail Trigger.** The search is `from:noreply@p-direkt.minbzk.nl has:attachment -label:salarisstrook-n8n newer_than:30d`. A mail stays in that result until the workflow has labelled it, so a failed run (Claude down, Telegram error, machine off) is retried the next hour. The Gmail Trigger node only delivers each mail once, so a failure there means the payslip is skipped for good.
+- **Hourly search instead of a Gmail Trigger.** The search is `from:noreply@p-direkt.minbzk.nl subject:Salarisstrook has:attachment -label:salarisstrook-n8n newer_than:30d` (the subject filter keeps out the "Jaaropgave" that P-Direkt sends in January). A mail stays in that result until the workflow has labelled it, so a failed run (Claude down, Telegram error, machine off) is retried the next hour. The Gmail Trigger node only delivers each mail once, so a failure there means the payslip is skipped for good.
 - **The skip check is explicit.** `Label-ID erbij` looks up the label ID and flags mails that already have the label; `Nog niet verwerkt` drops them. This matters for the manual test path, which does not exclude the label in its query.
 - **Notify first, then label.** If labelling fails after the notification was sent, the next run sends it again. The other order would lose the notification silently.
 - **Masking.** Before the text goes to Claude, IBANs and bare runs of 6-12 digits (personnel number, BSN) are replaced with `[IBAN]` / `[NUMMER]`. Amounts always contain a comma, so they are untouched.
-- **Cross-check.** Every amount Claude returns is formatted back to Dutch notation (`6.545,34`) and looked up in the PDF text. If one is missing, the notification gets a warning line. This catches invented amounts, not amounts copied from the wrong line.
+- **Cross-check.** Every amount Claude returns is formatted back to Dutch notation (`6.545,34`) and looked up in the PDF text. If one is missing, the notification gets a warning line. This catches invented amounts, not amounts copied from the wrong line. Claude therefore only copies printed amounts; the recalculation total, which the payslip does not print, is the sum of the lines marked `*` on page 1 and is computed in code.
+- **Recalculation categories.** The appendix lines are grouped into fixed categories (`reiskosten`, `thuiswerk`, `ikb`, `overig`), which keeps the notification short and the same from month to month.
 - **Model.** `claude-opus-5` with `effort: low` and structured output (JSON schema). One payslip is roughly 3-4k input tokens, so a few cents per run. `fallbacks: "default"` re-runs the request on another model if a safety classifier declines it. For a cheaper run, change `model` in `Maskeren en prompt bouwen` to `claude-haiku-4-5` and remove `effort` and `fallbacks` (plus the `anthropic-beta` header in `Claude: bedragen uitlezen`); Haiku supports neither.
 - **Errors** go to the second workflow, `Salarisstrook (n8n) - foutmelding`, which sends the node name and error message to Telegram. With the hourly retry, a persistent error (for example an expired Google token) repeats every hour until fixed.
 - **Gmail actions used:** search, get, add label, remove `UNREAD`. Nothing is deleted, moved, sent or archived. Note that n8n's Gmail credential asks Google for broader scopes than that; the restriction is in the workflow, not in the token.
@@ -58,7 +59,7 @@ loginctl enable-linger $USER
 
 ### 3. Anthropic API key
 
-Create a key in https://console.anthropic.com (billed per use, separate from a Claude subscription). In n8n: *Credentials → Add → Header Auth*, name **`Anthropic API`**, header name `x-api-key`, value the key.
+Create a key in https://console.anthropic.com (billed per use, separate from a Claude subscription). In n8n: *Credentials → Add → Header Auth*, name **`Header Auth account`**, header name `x-api-key`, value the key.
 
 ### 4. Telegram bot
 
@@ -67,7 +68,7 @@ Create a key in https://console.anthropic.com (billed per use, separate from a C
    ```bash
    curl -s "https://api.telegram.org/bot<TOKEN>/getUpdates" | jq '.result[0].message.chat.id'
    ```
-3. In n8n: *Credentials → Add → Telegram API*, name **`Telegram bot`**, paste the token.
+3. In n8n: *Credentials → Add → Telegram API*, name **`Telegram account`**, paste the token.
 
 ### 5. Gmail label
 
@@ -92,7 +93,7 @@ Activate both workflows when testing is done (*Publish* / *Active* toggle).
    - In the execution, node `Maskeren en prompt bouwen`: the text sent to Claude contains no account or personnel number.
    - In Gmail: label `salarisstrook-n8n` added, mail read.
 2. **Skip.** Run it again: `Nog niet verwerkt` outputs nothing, no message.
-3. **Other months.** Change the query in `Zoekopdracht (test)`, e.g. a month with and one without `Herberekening`, and `subject:"Salarisstrook januari 2026"` (two payslips, two messages).
+3. **Other months.** Change the query in `Zoekopdracht (test)`, e.g. a month with and one without `Herberekening`, and `subject:"Salarisstrook januari 2026"`. Start the run from the `Handmatige test` trigger (its play button); *Execute workflow* starts from `Elk uur`.
 4. **Safety net.** Execute `Op de 26e om 09:00` manually. With a payslip this month it sends nothing. To see the message, temporarily change `after:` in `Strook deze maand?` to a future date.
 5. **Restart.** `docker-compose restart` and run a test again: the Gmail credential must still work.
 
