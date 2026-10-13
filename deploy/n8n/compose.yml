@@ -1,0 +1,41 @@
+# n8n on the VPS, behind the shared Caddy (https://${N8N_HOST}).
+# Copied to /opt/apps/n8n by setup_n8n.sh and deploy.sh. Values come from
+# /opt/apps/n8n/.env, which only exists on the VPS.
+# No ports are published: Caddy reaches n8n over the 'proxy' network.
+# For running n8n on your own machine, use docker-compose.yml in the repo root.
+name: n8n
+services:
+  n8n:
+    image: docker.io/n8nio/n8n:${N8N_VERSION}
+    container_name: n8n
+    restart: unless-stopped
+    environment:
+      TZ: Europe/Amsterdam
+      GENERIC_TIMEZONE: Europe/Amsterdam
+      N8N_HOST: ${N8N_HOST}
+      N8N_PORT: "5678"
+      N8N_PROTOCOL: https
+      N8N_EDITOR_BASE_URL: https://${N8N_HOST}/
+      WEBHOOK_URL: https://${N8N_HOST}/
+      # Caddy sits in front; trust its X-Forwarded-* headers.
+      N8N_PROXY_HOPS: "1"
+      # Encrypts the credential store. Losing it means re-entering every credential.
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+      # Execution data contains payslip text; keep it a week, then prune.
+      EXECUTIONS_DATA_PRUNE: "true"
+      EXECUTIONS_DATA_MAX_AGE: "168"
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_PERSONALIZATION_ENABLED: "false"
+    volumes:
+      - n8n-data:/home/node/.n8n
+      # Workflow files, copied here by import_workflows.sh.
+      - ./workflows:/workflows:ro
+    networks:
+      - proxy
+
+networks:
+  proxy:
+    external: true
+
+volumes:
+  n8n-data:

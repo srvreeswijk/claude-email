@@ -107,5 +107,5 @@ To re-test a mail, remove the `salarisstrook-n8n` label in Gmail.
 
 ## Limitations
 
-- n8n only runs while this machine is on. Missed hourly runs are caught up by the next one (the search looks back 30 days). The 26th check uses `misfirePolicy: coalesce`, which runs a missed check once n8n is back; that relies on n8n's durable scheduler, which is still in preview in 2.41.
+- n8n only runs while this machine is on. To run it on the VPS instead, see [deploy/README.md](deploy/README.md). Missed hourly runs are caught up by the next one (the search looks back 30 days). The 26th check uses `misfirePolicy: coalesce`, which runs a missed check once n8n is back; that relies on n8n's durable scheduler, which is still in preview in 2.41.
 - The cross-check cannot tell whether an amount was taken from the right line.

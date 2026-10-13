@@ -1,0 +1,9 @@
+# n8n. Written by claude-email/deploy/setup_n8n.sh; edit the template in that repo, not this file.
+# The basic_auth is an extra lock in front of n8n's own login. The workflows use
+# no webhooks; if one ever needs them, exclude /webhook/* from basic_auth.
+__HOST__ {
+	basic_auth {
+		__USER__ __HASH__
+	}
+	reverse_proxy n8n:5678
+}

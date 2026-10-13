@@ -4,3 +4,7 @@ n8n_data/
 *.pdf
 executions/
 client_secret*
+# VPS deploy: local settings and downloaded backups (the backups hold the encryption key).
+deploy/config.env
+deploy/backups/
+deploy/credentials.env
